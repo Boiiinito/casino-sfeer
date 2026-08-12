@@ -343,19 +343,36 @@ def draw_scrollable_text(surface, text, viewport_rect, font, color, scroll_offse
     return content_height
 
 
-def draw_scrollbar(surface, viewport_rect, content_height, scroll_offset):
-    """Draws a simple scrollbar on the right edge of viewport_rect when content overflows."""
+def get_scrollbar_rects(viewport_rect, content_height, scroll_offset):
+    """Returns (track_rect, thumb_rect) for the scrollbar, or (None, None) if content fits."""
     if content_height <= viewport_rect.height:
-        return
+        return None, None
 
     track_rect = pygame.Rect(viewport_rect.right + 8, viewport_rect.y, 8, viewport_rect.height)
-    pygame.draw.rect(surface, (220, 220, 220), track_rect)
-
     thumb_height = max(30, int(viewport_rect.height * viewport_rect.height / content_height))
     max_scroll = content_height - viewport_rect.height
     scroll_ratio = scroll_offset / max_scroll if max_scroll > 0 else 0
     thumb_y = viewport_rect.y + int((viewport_rect.height - thumb_height) * scroll_ratio)
     thumb_rect = pygame.Rect(track_rect.x, thumb_y, track_rect.width, thumb_height)
+    return track_rect, thumb_rect
+
+
+def scroll_offset_for_thumb_y(thumb_y, viewport_rect, content_height, thumb_height):
+    """Converts a desired thumb top position back into a clamped scroll offset."""
+    max_scroll = max(0, content_height - viewport_rect.height)
+    track_span = viewport_rect.height - thumb_height
+    ratio = 0 if track_span <= 0 else (thumb_y - viewport_rect.y) / track_span
+    ratio = max(0.0, min(1.0, ratio))
+    return int(ratio * max_scroll)
+
+
+def draw_scrollbar(surface, viewport_rect, content_height, scroll_offset):
+    """Draws a simple scrollbar on the right edge of viewport_rect when content overflows."""
+    track_rect, thumb_rect = get_scrollbar_rects(viewport_rect, content_height, scroll_offset)
+    if track_rect is None:
+        return
+
+    pygame.draw.rect(surface, (220, 220, 220), track_rect)
     pygame.draw.rect(surface, RED, thumb_rect)
 
 
@@ -525,6 +542,8 @@ def main_menu():
     rules_scroll_offset = 0
     rules_content_height = 0
     rules_viewport_rect = None
+    rules_scrollbar_dragging = False
+    rules_scrollbar_drag_grab_offset = 0
 
     RULES_TEXT = {
         "L'oL": "L'ol is a card game. There are 4 cards, and each card represents the card for their respective row. Place bets on the betting spaces to predict which card will appear in each row. For example, if you place a bet on the joker bet space in row 1, you are predicting that the first card will be a joker. The rest works the same for the other rows and betting spaces. The suits bets are for the middle cards (column 1 and 2 only). For example, if you place a bet on diamonds in column 2 (on the left), then you are betting that card number 2 will be diamonds, and the same applies to column 3. The 4T bet space is for betting that the 2 cards in column 2 and 3 will total either 2 or 4. Each card has a specific numeric value that applies only to the 4T bet space. Card values are Ace = 1, Jester = 1, King = 2, Queen = 2, and Joker = 2. For example, if the 2 middle cards are Jester + Joker, it is a loss because 1 + 2 = 3, but Ace + Jester wins because 1 + 1 = 2, and King + Queen wins because 2 + 2 = 4. Note: There is an 8-card rule. If the first 4 cards flipped over contain 2 or more cards of the same face value and/or 3 or more cards of the same suit, the game redraws a new set of 4 cards and the next 4 cards become the winning cards for that round.",
@@ -647,6 +666,35 @@ def main_menu():
                 elif screen_state == "rules_detail":
                     if rules_back_button.is_clicked(pos):
                         screen_state = "rules_list"
+                    elif rules_viewport_rect is not None:
+                        track_rect, thumb_rect = get_scrollbar_rects(
+                            rules_viewport_rect, rules_content_height, rules_scroll_offset
+                        )
+                        if thumb_rect is not None and thumb_rect.inflate(10, 0).collidepoint(pos):
+                            rules_scrollbar_dragging = True
+                            rules_scrollbar_drag_grab_offset = pos[1] - thumb_rect.y
+                        elif track_rect is not None and track_rect.inflate(10, 0).collidepoint(pos):
+                            rules_scroll_offset = scroll_offset_for_thumb_y(
+                                pos[1] - thumb_rect.height // 2,
+                                rules_viewport_rect,
+                                rules_content_height,
+                                thumb_rect.height,
+                            )
+                            rules_scrollbar_dragging = True
+                            rules_scrollbar_drag_grab_offset = thumb_rect.height // 2
+            elif event.type == MOUSEBUTTONUP:
+                rules_scrollbar_dragging = False
+            elif event.type == MOUSEMOTION and rules_scrollbar_dragging and rules_viewport_rect is not None:
+                track_rect, thumb_rect = get_scrollbar_rects(
+                    rules_viewport_rect, rules_content_height, rules_scroll_offset
+                )
+                if thumb_rect is not None:
+                    rules_scroll_offset = scroll_offset_for_thumb_y(
+                        event.pos[1] - rules_scrollbar_drag_grab_offset,
+                        rules_viewport_rect,
+                        rules_content_height,
+                        thumb_rect.height,
+                    )
             elif event.type == MOUSEWHEEL and screen_state == "rules_detail" and rules_viewport_rect is not None:
                 max_scroll = max(0, rules_content_height - rules_viewport_rect.height)
                 rules_scroll_offset -= event.y * 40
