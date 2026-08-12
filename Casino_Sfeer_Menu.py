@@ -17,6 +17,19 @@ from embedded_utils import (
 )
 from wallet import PlayerWallet
 
+# Without this, Windows DPI virtualization can misreport the screen/window
+# geometry for a frozen exe, pushing the title bar (and its close/minimize/
+# maximize buttons) off the top of the visible screen.
+if sys.platform.startswith("win"):
+    try:
+        import ctypes
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)
+    except Exception:
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
+
 # Initialize Pygame
 pygame.init()
 
@@ -42,9 +55,15 @@ HEIGHT = min(MENU_HEIGHT, max(600, screen_h - VERTICAL_CHROME_RESERVE))
 MENU_WIDTH = WIDTH
 MENU_HEIGHT = HEIGHT
 
-window_x = max(0, (screen_w - WIDTH) // 2)
-window_y = 0
-os.environ["SDL_VIDEO_WINDOW_POS"] = f"{window_x},{window_y}"
+if sys.platform.startswith("win"):
+    # Let Windows center the window itself so the title bar (and its
+    # close/minimize/maximize buttons) is always fully on-screen and
+    # draggable, instead of pinning it to the very top edge.
+    os.environ["SDL_VIDEO_WINDOW_POS"] = "center"
+else:
+    window_x = max(0, (screen_w - WIDTH) // 2)
+    window_y = 0
+    os.environ["SDL_VIDEO_WINDOW_POS"] = f"{window_x},{window_y}"
 
 window = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Casino Sfeer")

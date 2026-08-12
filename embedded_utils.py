@@ -102,8 +102,11 @@ def run_game_standalone(module, title):
     except Exception:
         screen_w = width
 
-    window_x = max(0, (screen_w - width) // 2)
-    os.environ["SDL_VIDEO_WINDOW_POS"] = f"{window_x},0"
+    if sys.platform.startswith("win"):
+        os.environ["SDL_VIDEO_WINDOW_POS"] = "center"
+    else:
+        window_x = max(0, (screen_w - width) // 2)
+        os.environ["SDL_VIDEO_WINDOW_POS"] = f"{window_x},0"
 
     window = pygame.display.set_mode((width, height))
     pygame.display.set_caption(title)
