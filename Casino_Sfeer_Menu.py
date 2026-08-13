@@ -12,8 +12,10 @@ from embedded_utils import (
     BACK_BUTTON_HEIGHT,
     BACK_BUTTON_MARGIN,
     cleanup_after_game,
+    create_scaled_display,
     get_game_size,
     get_back_font,
+    handle_display_resize,
 )
 from wallet import PlayerWallet
 
@@ -65,8 +67,7 @@ else:
     window_y = 0
     os.environ["SDL_VIDEO_WINDOW_POS"] = f"{window_x},{window_y}"
 
-window = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Casino Sfeer")
+window = create_scaled_display(WIDTH, HEIGHT, "Casino Sfeer")
 
 # Colors
 BLACK = (0, 0, 0)
@@ -384,8 +385,6 @@ def launch_game(game_name, player_wallet):
     try:
         module = importlib.import_module(module_name)
         importlib.reload(module)
-        global window
-        window = pygame.display.set_mode((MENU_WIDTH, MENU_HEIGHT))
         pygame.display.set_caption(f"Casino Sfeer - {game_name}")
 
         game_width, game_height = get_game_size(module)
@@ -462,6 +461,8 @@ def launch_game(game_name, player_wallet):
             events = original_event_get()
             transformed_events = []
             for event in events:
+                if handle_display_resize(event):
+                    continue
                 if event.type == pygame.MOUSEBUTTONDOWN and back_button_rect.collidepoint(event.pos):
                     transformed_events.append(pygame.event.Event(pygame.KEYDOWN, {"key": pygame.K_ESCAPE}))
                     continue
@@ -484,12 +485,10 @@ def launch_game(game_name, player_wallet):
             pygame.mouse.get_pos = original_mouse_get_pos
 
         cleanup_after_game()
-        window = pygame.display.set_mode((WIDTH, HEIGHT))
         pygame.display.set_caption("Casino Sfeer")
         return result != "quit"
     except Exception as e:
         print(f"Error launching {game_name}: {e}")
-        window = pygame.display.set_mode((WIDTH, HEIGHT))
         pygame.display.set_caption("Casino Sfeer")
         return True
 
@@ -546,7 +545,7 @@ def main_menu():
     rules_scrollbar_drag_grab_offset = 0
 
     RULES_TEXT = {
-        "L'oL": "L'ol is a card game. There are 4 cards, and each card represents the card for their respective row. Place bets on the betting spaces to predict which card will appear in each row. For example, if you place a bet on the joker bet space in row 1, you are predicting that the first card will be a joker. The rest works the same for the other rows and betting spaces. The suits bets are for the middle cards (column 1 and 2 only). For example, if you place a bet on diamonds in column 2 (on the left), then you are betting that card number 2 will be diamonds, and the same applies to column 3. The 4T bet space is for betting that the 2 cards in column 2 and 3 will total either 2 or 4. Each card has a specific numeric value that applies only to the 4T bet space. Card values are Ace = 1, Jester = 1, King = 2, Queen = 2, and Joker = 2. For example, if the 2 middle cards are Jester + Joker, it is a loss because 1 + 2 = 3, but Ace + Jester wins because 1 + 1 = 2, and King + Queen wins because 2 + 2 = 4. Note: There is an 8-card rule. If the first 4 cards flipped over contain 2 or more cards of the same face value and/or 3 or more cards of the same suit, the game redraws a new set of 4 cards and the next 4 cards become the winning cards for that round.",
+        "L'oL": "L'ol is a card game. There are 4 cards, and each card represents the card for their respective row. Place bets on the betting spaces to predict which card will appear in each row. For example, if you place a bet on the joker bet space in row 1, you are predicting that the first card will be a joker. The rest works the same for the other rows and betting spaces. The suits bets are for the middle cards (column 1 and 2 only). For example, if you place a bet on diamonds in column 2 (on the left), then you are betting that card number 2 will be diamonds, and the same applies to column 3. The 4T bet space is for betting that the 2 cards in column 2 and 3 will total either 2 or 4. Each card has a specific numeric value that applies only to the 4T bet space. Card values are Ace = 1, Jester = 1, King = 2, Queen = 2, and Joker = 0. For example, if the 2 middle cards are Ace and King, it is a loss because 1 + 2 = 3, but Ace + Jester wins because 1 + 1 = 2, and King + Queen wins because 2 + 2 = 4. Note: There is an 8-card rule. If the first 4 cards flipped over contain 2 or more cards of the same face value and/or 3 or more cards of the same suit, the game redraws a new set of 4 cards and the next 4 cards become the winning cards for that round.",
         "Di'eL": "Di'el is a card and dice game that uses the dice and cards to determine winnings for the betting spaces. If you bet on 1D, you are betting that there is a card matching one of the values on the die. If you bet on 2D, you are betting that there is a card with the total value of both dice. For example, if one die rolls 2 and the other die rolls 2, the 1D bet space wins if there is a card with the number 2, and the 2D bet space wins if there is a card with the number 4. If there are no cards that show 2 or 4, both bet spaces lose. The O bet space wins if only one die rolls 1, and the TE bet space wins if both dice total 11 or 12.",
         "ChanceO'Chill": "ChanceO'Chill is a card and dice game that uses cards and dice to determine the winner. The total value of the dice represents the threshold for both the dealer and the player. The player and dealer both have their own hand, and the one with a hand closest to the total value of both dice wins the round. Card values are Ace = 1, Jester = 2, King = 3, Queen = 4, and Joker = 5. All cards with numbers equal zero are considered power cards. For example, if the dice total 6, the hand closest to the dice wins, meaning if the player totals 5 and the dealer totals 8, the player wins. The 13F bet space is a bonus bet space that applies to the dice with the highest value only. If any die rolls a total of 1, 3, or 5, the 13F bet space wins. For example, if one die rolls 2 and the other rolls 5, the 13F bet wins, but if one die rolls 1 and the other rolls 3, it is a loss.",
         "Sui'tz": "Sui'tz is a card and dice game that uses the dice to determine the card slot that will contain the winning card for the round. Players must place bets on a suit or the joker bet space, and the dice will roll and give a number. For example, if the player bets on diamonds and hearts and the dice rolls 3, then the card in slot 3 should be either diamonds or hearts. If the dice rolls 5, it will use slot 2 as the winning slot, and if it rolls 6, it will use slot 4 as the winning slot.",
@@ -634,6 +633,8 @@ def main_menu():
             if event.type == QUIT:
                 pygame.quit()
                 sys.exit()
+            if handle_display_resize(event):
+                continue
             if event.type == MOUSEBUTTONDOWN:
                 pos = pygame.mouse.get_pos()
                 if screen_state == "menu":

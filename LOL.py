@@ -555,7 +555,7 @@ def resolve_bets(cards, betting_chips, label_positions):
         'Jester': 1,
         'King': 2,
         'Queen': 2,
-        'Joker': 2
+        'Joker': 0
     }
     
     for chip, center in betting_chips:

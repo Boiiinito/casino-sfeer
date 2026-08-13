@@ -50,6 +50,74 @@ def check_embedded_exit(event, embedded, back_rect):
     return None
 
 
+def create_scaled_display(width, height, caption):
+    """Creates a real, resizable OS window plus a fixed-size logical surface
+    that all drawing code targets. Every frame, the logical surface is
+    stretched to fill however big the real window/fullscreen currently is
+    (via patched pygame.display.flip/update), and mouse coordinates are
+    translated back to logical space (via patched pygame.mouse.get_pos/
+    pygame.event.get), so existing draw code and click handling need no
+    changes and the whole game visually resizes with the window - no
+    black bars.
+    """
+    pygame.display.set_mode((width, height), pygame.RESIZABLE)
+    pygame.display.set_caption(caption)
+    logical_surface = pygame.Surface((width, height)).convert()
+
+    native_flip = pygame.display.flip
+    native_update = pygame.display.update
+    native_get_pos = pygame.mouse.get_pos
+    native_event_get = pygame.event.get
+
+    def present():
+        real_surface = pygame.display.get_surface()
+        if real_surface is None:
+            return
+        if real_surface.get_size() == logical_surface.get_size():
+            real_surface.blit(logical_surface, (0, 0))
+        else:
+            pygame.transform.smoothscale(logical_surface, real_surface.get_size(), real_surface)
+        native_flip()
+
+    def present_update(*args):
+        present()
+
+    def to_logical(pos):
+        real_surface = pygame.display.get_surface()
+        real_w, real_h = real_surface.get_size() if real_surface else logical_surface.get_size()
+        logical_w, logical_h = logical_surface.get_size()
+        if real_w <= 0 or real_h <= 0:
+            return pos
+        x, y = pos
+        return (int(x * logical_w / real_w), int(y * logical_h / real_h))
+
+    def scaled_get_pos():
+        return to_logical(native_get_pos())
+
+    def scaled_event_get(*args, **kwargs):
+        events = native_event_get(*args, **kwargs)
+        for event in events:
+            if event.type in (pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP, pygame.MOUSEMOTION) and hasattr(event, "pos"):
+                event.pos = to_logical(event.pos)
+        return events
+
+    pygame.display.flip = present
+    pygame.display.update = present_update
+    pygame.mouse.get_pos = scaled_get_pos
+    pygame.event.get = scaled_event_get
+
+    return logical_surface
+
+
+def handle_display_resize(event):
+    """Resizes the real OS window in response to a user drag/maximize/
+    fullscreen (VIDEORESIZE). Returns True if the event was consumed."""
+    if event.type == pygame.VIDEORESIZE:
+        pygame.display.set_mode((event.w, event.h), pygame.RESIZABLE)
+        return True
+    return False
+
+
 def cleanup_after_game():
     pygame.event.clear()
     for event_id in range(pygame.USEREVENT, pygame.NUMEVENTS):
@@ -108,8 +176,7 @@ def run_game_standalone(module, title):
         window_x = max(0, (screen_w - width) // 2)
         os.environ["SDL_VIDEO_WINDOW_POS"] = f"{window_x},0"
 
-    window = pygame.display.set_mode((width, height))
-    pygame.display.set_caption(title)
+    window = create_scaled_display(width, height, title)
 
     game_width, game_height = get_game_size(module)
     game_surface = pygame.Surface((game_width, game_height))
@@ -184,6 +251,8 @@ def run_game_standalone(module, title):
         events = original_event_get()
         transformed_events = []
         for event in events:
+            if handle_display_resize(event):
+                continue
             if event.type == pygame.MOUSEBUTTONDOWN and back_button_rect.collidepoint(event.pos):
                 transformed_events.append(pygame.event.Event(pygame.KEYDOWN, {"key": pygame.K_ESCAPE}))
                 continue
