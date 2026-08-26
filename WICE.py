@@ -533,16 +533,26 @@ def get_shared_letter(letter):
 # Function to show results in a separate "page" when the center is clicked.
 def show_result_page(wheel_state, dice_values):
     result_running = True
-    # None means the pointer landed on a blank space (a push), not a real winning letter.
+    # None means either the dice rolled 12 or below (a loss) or the wheel landed on a blank space (a push).
     winning_letter = wheel_state.get_winning_letter()
     dice_sum = sum(dice_values)
+    dice_lost = dice_sum <= 12
     shared_letter = get_shared_letter(winning_letter) if winning_letter else "N/A"
+    if dice_lost:
+        result_text = "Result: Loss (dice rolled 12 or below)"
+        bets_text = "Bet forfeited, no refund."
+    elif winning_letter is None:
+        result_text = "Result: Push"
+        bets_text = "Original bets returned."
+    else:
+        result_text = "Result: Winner"
+        bets_text = ""
     result_lines = [
         f"Dice Values: {dice_values[0]}, {dice_values[1]}, {dice_values[2]}, {dice_values[3]} (Sum: {dice_sum})",
         f"Winning Letter: {winning_letter if winning_letter is not None else 'None'}",
         f"Shared Bet Letter: {shared_letter}",
-        "Result: Push" if winning_letter is None else "Result: Winner" if winning_letter else "Result: Push",
-        "Original bets returned." if winning_letter is None else "",
+        result_text,
+        bets_text,
         "Press any key to return."
     ]
     while result_running:
@@ -581,6 +591,7 @@ def main(surface=None, embedded=False, wallet=None):
     shared_wallet = wallet
     wallet = shared_wallet.balance if shared_wallet is not None else 1000
     round_ended = False
+    dice_lost = False
     round_counter = 0
     dice_values = roll_dice()
     dice_animating = False
@@ -608,6 +619,7 @@ def main(surface=None, embedded=False, wallet=None):
                     dice_total = sum(final_dice)
                     if dice_total <= 12:
                         print("Total dice value is 12 or below. Player loses their bet immediately.")
+                        dice_lost = True
                         round_ended = True
                     else:
                         spin_duration = dice_total
@@ -638,9 +650,14 @@ def main(surface=None, embedded=False, wallet=None):
                         continue
                     if wheel_state.is_spinning or round_ended:
                         if round_ended and spin_x <= mouse_pos[0] <= (spin_x + BUTTON_WIDTH) and spin_y <= mouse_pos[1] <= (spin_y + BUTTON_HEIGHT):
-                            wallet = process_winning_bets(placed_bets, wheel_state.winning_letter, wallet)
-                            placed_bets = []
+                            if dice_lost:
+                                # Dice rolled 12 or below: player loses the bet outright, no refund.
+                                placed_bets = []
+                            else:
+                                wallet = process_winning_bets(placed_bets, wheel_state.winning_letter, wallet)
+                                placed_bets = []
                             round_ended = False
+                            dice_lost = False
                             round_counter += 1
                             upcoming_dir = True if round_counter % 2 == 0 else False
                             wheel_state.new_round(upcoming_anticlockwise=upcoming_dir)

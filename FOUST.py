@@ -435,14 +435,22 @@ class FoustGame:
         dealer_wins = False
         is_tie = False
 
-        # NEW JOKER RULE: If someone has a joker, they win automatically
+        # NEW JOKER RULE: If someone has a joker, they win automatically,
+        # unless counting the joker's color still leaves their hand's colors tied (e.g. 2 red/2 black),
+        # in which case it's a push.
         # If both have jokers, it's a tie
         if player_has_joker and dealer_has_joker:
             is_tie = True
         elif player_has_joker:
-            player_wins = True
+            if player_red_count == player_black_count:
+                is_tie = True
+            else:
+                player_wins = True
         elif dealer_has_joker:
-            dealer_wins = True
+            if dealer_red_count == dealer_black_count:
+                is_tie = True
+            else:
+                dealer_wins = True
         else:
             # If no Jokers present, use the original win conditions
             

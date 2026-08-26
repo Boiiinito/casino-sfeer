@@ -534,7 +534,15 @@ class SutzGame:
         num_jokers = len(jokers)
 
         if num_jokers > 1:
-            # More than one joker: player loses
+            joker_colors = {joker.color for joker in jokers}
+            if num_jokers == 2 and len(joker_colors) == 2:
+                # One red and one black joker: push, bet returned.
+                self.resolve_push(
+                    "Push. Player drew both a red and a black Joker.",
+                    ["Red and black Joker both in hand"]
+                )
+                return
+            # More than one joker of the same color: player loses
             self.betting_triangle.start_flash(RED)
             result_str = "Dealer wins. More than one Joker in hand is an instant loss."
             self.round_history.append({
@@ -862,8 +870,8 @@ def main(surface=None, embedded=False, wallet=None):
                             game.game_state = "PLAYING"
                         else:
                             if flip_rect.collidepoint(pos):
-                                # Start rolling without requiring a bet (triangle bet space removed)
-                                if game.game_state == "PLAYING":
+                                # Require a placed bet before allowing the roll/flip
+                                if game.game_state == "PLAYING" and game.betting_triangle.current_bet > 0:
                                     game.game_state = "ROLLING_DICE"
                                     game.dice_roll_start = pygame.time.get_ticks()
                                     game.roll_all_dice()

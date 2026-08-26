@@ -19,11 +19,16 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pyinstaller
+          pip install pyinstaller pillow
+
+      - name: Convert logo to .ico for exe icon
+        run: |
+          python -c "from PIL import Image; Image.open('Assets/logo.jpg').convert('RGBA').save('Assets/logo.ico', sizes=[(16,16),(32,32),(48,48),(256,256)])"
 
       - name: Build EXE
         run: |
           pyinstaller --noconfirm --onefile --windowed --name "CasinoSfeer" `
+            --icon "Assets/logo.ico" --add-data "Assets;Assets" `
             --hidden-import LOL --hidden-import DIEL --hidden-import CHANCEOCHILL `
             --hidden-import SUITZ --hidden-import SUTZ --hidden-import WICE `
             --hidden-import FOUST --hidden-import FANIRAFANA `
