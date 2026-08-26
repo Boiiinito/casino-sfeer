@@ -221,7 +221,10 @@ def run_game_standalone(module, title):
     def draw_overlay():
         window.fill((255, 255, 255))
         if scale < 1.0:
-            scaled_surface = pygame.transform.smoothscale(game_surface, (scaled_width, scaled_height))
+            # Plain scale (not smoothscale): smoothscale measurably shifts
+            # solid colors (e.g. pure white -> 253,253,253), visible as a
+            # faint tinted box around scaled-down games like Wice.
+            scaled_surface = pygame.transform.scale(game_surface, (scaled_width, scaled_height))
             window.blit(scaled_surface, target_rect)
         else:
             window.blit(game_surface, target_rect)

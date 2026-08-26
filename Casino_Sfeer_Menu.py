@@ -78,6 +78,17 @@ try:
 except Exception:
     pass
 
+# Logo banner shown above the "Casino Sfeer" title on the main menu.
+MENU_LOGO_HEIGHT = 90
+menu_logo_image = None
+try:
+    _logo_raw = pygame.image.load(icon_path).convert()
+    _logo_scale = MENU_LOGO_HEIGHT / _logo_raw.get_height()
+    _logo_size = (int(_logo_raw.get_width() * _logo_scale), MENU_LOGO_HEIGHT)
+    menu_logo_image = pygame.transform.smoothscale(_logo_raw, _logo_size)
+except Exception:
+    menu_logo_image = None
+
 # Colors
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
@@ -161,7 +172,14 @@ column_gap = 40
 left_column_x = center_x - (button_width + column_gap // 2)
 right_column_x = center_x + (column_gap // 2)
 row_height = button_height + button_spacing
-start_y = 300
+# Place buttons a proportionate gap below the (logo-shifted) title box, with a
+# matching gap left below the last row before the bottom of the window.
+_title_bg_padding = 22
+_title_bg_height = title_font.get_height() + _title_bg_padding * 2
+_title_bg_bottom = (70 - _title_bg_padding + MENU_LOGO_HEIGHT + 10) + _title_bg_height
+_buttons_block_height = row_height * 3 + button_height
+_vertical_gap = max(20, (HEIGHT - _title_bg_bottom - _buttons_block_height) / 2)
+start_y = _title_bg_bottom + _vertical_gap
 
 # Create buttons with the new 4 + 4 layout
 game_buttons = []
@@ -440,7 +458,10 @@ def launch_game(game_name, player_wallet):
             if window is not None and game_surface is not None:
                 window.fill(WHITE)
                 if scale < 1.0:
-                    scaled_surface = pygame.transform.smoothscale(game_surface, (scaled_width, scaled_height))
+                    # Plain scale (not smoothscale): smoothscale measurably shifts
+                    # solid colors (e.g. pure white -> 253,253,253), visible as a
+                    # faint tinted box around scaled-down games like Wice.
+                    scaled_surface = pygame.transform.scale(game_surface, (scaled_width, scaled_height))
                     window.blit(scaled_surface, target_rect)
                 else:
                     window.blit(game_surface, target_rect)
@@ -604,7 +625,8 @@ def main_menu():
     bg_width = total_width + bg_padding * 2
     bg_height = title_font.get_height() + bg_padding * 2
     bg_x = WIDTH / 2 - bg_width / 2
-    bg_y = 70 - bg_padding
+    bg_y = 70 - bg_padding + MENU_LOGO_HEIGHT + 10
+    logo_y = bg_y - MENU_LOGO_HEIGHT - 20
 
     while True:
         window.fill(WHITE)
@@ -613,6 +635,9 @@ def main_menu():
             if show_credits:
                 draw_credits()
             else:
+                if menu_logo_image is not None:
+                    logo_x = WIDTH / 2 - menu_logo_image.get_width() / 2
+                    window.blit(menu_logo_image, (logo_x, logo_y))
                 draw_card_symbols()
 
                 current_x = (WIDTH - total_width) // 2
@@ -621,11 +646,12 @@ def main_menu():
                 pygame.draw.rect(window, RED, (bg_x, bg_y, bg_width, bg_height), 10)
 
                 # Draw title text with shadow
+                title_text_y = bg_y + bg_padding
                 for text, color in title_parts:
                     text_surface = title_font.render(text, True, color)
                     shadow_surface = title_font.render(text, True, (200, 200, 200))
-                    window.blit(shadow_surface, (current_x + 4, 73))
-                    window.blit(text_surface, (current_x, 70))
+                    window.blit(shadow_surface, (current_x + 4, title_text_y + 3))
+                    window.blit(text_surface, (current_x, title_text_y))
                     current_x += text_surface.get_width()
 
                 for button in game_buttons:
