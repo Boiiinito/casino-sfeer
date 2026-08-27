@@ -39,3 +39,43 @@ jobs:
         with:
           name: CasinoSfeer-windows-exe
           path: dist/CasinoSfeer.exe
+
+      - name: Generate MSIX image assets
+        run: |
+          python packaging/make_assets.py Assets/logo.jpg packaging/AppxAssets
+
+      - name: Assemble MSIX package layout
+        run: |
+          New-Item -ItemType Directory -Force -Path msix_root/Assets | Out-Null
+          Copy-Item dist/CasinoSfeer.exe msix_root/CasinoSfeer.exe
+          Copy-Item packaging/AppxAssets/* msix_root/Assets/
+          (Get-Content packaging/AppxManifest.xml) -replace '__VERSION__', "1.0.$env:GITHUB_RUN_NUMBER.0" | Set-Content msix_root/AppxManifest.xml
+
+      - name: Locate MakeAppx and SignTool
+        run: |
+          $sdkBin = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Directory |
+            Where-Object { $_.Name -match '^10\.' } |
+            Sort-Object Name -Descending | Select-Object -First 1
+          echo "MAKEAPPX=$($sdkBin.FullName)\x64\makeappx.exe" >> $env:GITHUB_ENV
+          echo "SIGNTOOL=$($sdkBin.FullName)\x64\signtool.exe" >> $env:GITHUB_ENV
+
+      - name: Pack MSIX
+        run: |
+          & $env:MAKEAPPX pack /d msix_root /p dist/CasinoSfeer.msix /o
+
+      - name: Sign MSIX with matching publisher cert
+        run: |
+          $cert = New-SelfSignedCertificate -Type Custom `
+            -Subject "CN=667172E9-152F-4367-99D4-BA2553ED9107" `
+            -KeyUsage DigitalSignature -FriendlyName "CasinoSfeer MSIX Signing" `
+            -CertStoreLocation "Cert:\CurrentUser\My" `
+            -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3","2.5.29.19={text}")
+          $pwd = ConvertTo-SecureString -String "CasinoSfeerBuild!2026" -Force -AsPlainText
+          Export-PfxCertificate -Cert $cert -FilePath cert.pfx -Password $pwd
+          & $env:SIGNTOOL sign /fd SHA256 /a /f cert.pfx /p "CasinoSfeerBuild!2026" dist/CasinoSfeer.msix
+
+      - name: Upload MSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CasinoSfeer-msix
+          path: dist/CasinoSfeer.msix
